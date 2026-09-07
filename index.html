@@ -169,10 +169,6 @@
     visibility: visible;
   }
 
-  .scene.dragging .cube {
-    animation-play-state: paused;
-  }
-
   .side {
     position: absolute;
     inset: 0;
@@ -639,10 +635,7 @@ initLocalPhotoLibrary();
 const LOCAL_DB_NAME = "liti-local-photos";
 const LOCAL_DB_VERSION = 1;
 const LOCAL_STORE_NAME = "photos";
-const LOCAL_REFRESH_MS = 15000;
-
 let localPhotoItems = [];
-let localPhotoTimer = null;
 let localObjectUrls = [];
 
 function openLocalDatabase() {
@@ -754,9 +747,6 @@ async function refreshLocalLibrary() {
 
     if (localPhotoItems.length > 0) {
       applyRandomLocalImages();
-      if (!localPhotoTimer) {
-        localPhotoTimer = setInterval(applyRandomLocalImages, LOCAL_REFRESH_MS);
-      }
     }
   } catch (e) {
     // IndexedDB 不可用时保持占位图
@@ -979,6 +969,12 @@ scene.addEventListener("pointerdown", onPointerDown);
 scene.addEventListener("pointermove", onPointerMove);
 scene.addEventListener("pointerup", onPointerEnd);
 scene.addEventListener("pointercancel", onPointerEnd);
+scene.addEventListener("lostpointercapture", function () {
+  if (activePointers.size === 0) {
+    dragPointerId = null;
+    scene.classList.remove("dragging");
+  }
+});
 scene.addEventListener("dblclick", function () {
   if (performance.now() < suppressDblClickUntil) return;
   toggleExplosion();
