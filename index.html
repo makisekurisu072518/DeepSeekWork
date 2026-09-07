@@ -502,11 +502,22 @@ requestAnimationFrame(function () {
 });
 
 // ========== 从 photos 仓库定时随机取图 ==========
-let remoteImageUrls = [];
+let remoteImages = [];
 let photoTimer = null;
 
 function encodeRepoPath(path) {
   return path.split("/").map(encodeURIComponent).join("/");
+}
+
+function buildImageCandidates(path) {
+  const encoded = encodeRepoPath(path);
+  const base = PHOTOS_REPO_OWNER + "/" + PHOTOS_REPO_NAME;
+  return [
+    "https://raw.githubusercontent.com/" + base + "/" + PHOTOS_BRANCH + "/" + encoded,
+    "https://cdn.jsdelivr.net/gh/" + base + "@" + PHOTOS_BRANCH + "/" + encoded,
+    "https://fastly.jsdelivr.net/gh/" + base + "@" + PHOTOS_BRANCH + "/" + encoded,
+    "https://gcore.jsdelivr.net/gh/" + base + "@" + PHOTOS_BRANCH + "/" + encoded
+  ];
 }
 
 async function fetchRemoteImages() {
@@ -516,14 +527,16 @@ async function fetchRemoteImages() {
   const response = await fetch(apiUrl);
   if (!response.ok) throw new Error("GitHub API " + response.status);
   const data = await response.json();
-  const urls = (data.tree || [])
+  const images = (data.tree || [])
     .map(function (item) { return item.path; })
     .filter(function (path) { return IMAGE_FILE_RE.test(path); })
     .map(function (path) {
-      return "https://cdn.jsdelivr.net/gh/" + PHOTOS_REPO_OWNER + "/" + PHOTOS_REPO_NAME +
-        "@" + PHOTOS_BRANCH + "/" + encodeRepoPath(path);
+      return {
+        path: path,
+        urls: buildImageCandidates(path)
+      };
     });
-  return urls;
+  return images;
 }
 
 function shuffledCopy(list) {
@@ -538,8 +551,8 @@ function shuffledCopy(list) {
 }
 
 function randomUrls(count, avoidSet) {
-  const pool = shuffledCopy(remoteImageUrls.filter(function (url) {
-    return !avoidSet || !avoidSet.has(url);
+  const pool = shuffledCopy(remoteImages.filter(function (image) {
+    return !avoidSet || !avoidSet.has(image.path);
   }));
   const result = [];
   for (let i = 0; i < count; i++) {
@@ -547,50 +560,67 @@ function randomUrls(count, avoidSet) {
       const index = Math.floor(Math.random() * pool.length);
       result.push(pool.splice(index, 1)[0]);
     } else {
-      const fallback = shuffledCopy(remoteImageUrls);
+      const fallback = shuffledCopy(remoteImages);
       result.push(fallback[i % fallback.length]);
     }
   }
   return result;
 }
 
-function applyUrlsToFaces(faces, urls) {
+function assignImageSource(img, urls) {
+  if (!img.dataset.originalSrc) {
+    img.dataset.originalSrc = img.src;
+  }
+  img.dataset.tryIndex = "0";
+  img.onerror = function () {
+    const next = Number(img.dataset.tryIndex || 0) + 1;
+    if (next < urls.length) {
+      img.dataset.tryIndex = String(next);
+      img.src = urls[next];
+    } else {
+      img.onerror = null;
+      img.src = img.dataset.originalSrc;
+    }
+  };
+  img.src = urls[0];
+}
+
+function applyImagesToFaces(faces, images) {
   faces.forEach(function (face, index) {
-    const url = urls[index % urls.length];
+    const image = images[index % images.length];
     face.classList.add("remote");
-    face.querySelectorAll(".side-bg").forEach(function (img) { img.src = url; });
-    face.querySelectorAll(".side-main").forEach(function (img) {
-      img.src = url;
-      img.alt = "";
+    face.querySelectorAll(".side-bg, .side-main").forEach(function (img) {
+      assignImageSource(img, image.urls);
+      if (img.classList.contains("side-main")) img.alt = "";
     });
   });
 }
 
 function applyRandomImages() {
-  if (remoteImageUrls.length === 0) return;
+  if (remoteImages.length === 0) return;
   const inner = randomUrls(innerFaces.length, null);
   const outer = randomUrls(outerFaces.length, new Set(inner));
-  applyUrlsToFaces(innerFaces, inner);
-  applyUrlsToFaces(outerFaces, outer);
+  applyImagesToFaces(innerFaces, inner);
+  applyImagesToFaces(outerFaces, outer);
 
   // 预加载下一批候选图，减少切换时的空白
-  shuffledCopy(remoteImageUrls).slice(0, 12).forEach(function (url) {
-    const image = new Image();
-    image.src = url;
+  shuffledCopy(remoteImages).slice(0, 12).forEach(function (image) {
+    const preload = new Image();
+    preload.src = image.urls[0];
   });
 }
 
 async function startPhotoFeed() {
   try {
     const list = await fetchRemoteImages();
-    remoteImageUrls = list.filter(function (url, index) {
-      return list.indexOf(url) === index;
+    remoteImages = list.filter(function (image, index) {
+      return list.findIndex(function (item) { return item.path === image.path; }) === index;
     });
   } catch (e) {
-    remoteImageUrls = [];
+    remoteImages = [];
   }
 
-  if (remoteImageUrls.length > 0) {
+  if (remoteImages.length > 0) {
     applyRandomImages();
     if (!photoTimer) {
       photoTimer = setInterval(applyRandomImages, IMAGE_REFRESH_MS);
