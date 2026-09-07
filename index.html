@@ -363,25 +363,17 @@
 
 <script>
 // ============================================================
-// 照片配置：src 换成你的图片路径，如 "photos/1.jpg"。
-// 前 6 张贴内层立方体，后 6 张贴外层立方体。
+// 默认占位图（当本地无图片时显示）
+// 前 6 张贴内层，后 6 张贴外层
 // ============================================================
 const PHOTOS = [
-  { src: "", caption: "春",   layer: "inner" },
-  { src: "", caption: "夏",   layer: "inner" },
-  { src: "", caption: "秋",   layer: "inner" },
-  { src: "", caption: "冬",   layer: "inner" },
-  { src: "", caption: "和你", layer: "inner" },
-  { src: "", caption: "樱花", layer: "inner" },
-  { src: "", caption: "春天", layer: "outer" },
-  { src: "", caption: "夏天", layer: "outer" },
-  { src: "", caption: "秋天", layer: "outer" },
-  { src: "", caption: "冬天", layer: "outer" },
-  { src: "", caption: "出发", layer: "outer" },
-  { src: "", caption: "未来", layer: "outer" }
+  { caption: "春" }, { caption: "夏" }, { caption: "秋" }, { caption: "冬" },
+  { caption: "和" }, { caption: "你" },
+  { caption: "樱" }, { caption: "花" }, { caption: "未" }, { caption: "来" },
+  { caption: "期" }, { caption: "待" }
 ];
 
-// 音乐文件：把 bgm.mp3 放在 index.html 同目录，或改成网络音乐地址
+// 音乐文件（请放置 bgm.mp3 或修改 URL）
 const MUSIC_SRC = "bgm.mp3";
 
 // 自动开合节奏
@@ -391,14 +383,7 @@ const BREATH_OPEN_MS = 1600;
 // 无操作多久后隐藏界面按钮
 const UI_HIDE_DELAY_MS = 3200;
 
-// ===== 图片仓库随机播放配置 =====
-const PHOTOS_REPO_OWNER = "makisekurisu072518";
-const PHOTOS_REPO_NAME = "photos";
-const PHOTOS_BRANCH = "main";
-const IMAGE_REFRESH_MS = 15000;
-const EMPTY_RETRY_MS = 60000;
-const IMAGE_FILE_RE = /\.(jpe?g|png|webp|gif)$/i;
-
+// ===== 立方体面布局 =====
 const FACE_LAYOUTS = [
   "rotateY(0deg)",
   "rotateY(180deg)",
@@ -408,6 +393,7 @@ const FACE_LAYOUTS = [
   "rotateX(-90deg)"
 ];
 
+// 占位 SVG（有编号和文字）
 function placeholderSVG(label, index) {
   const hue = (index * 47 + 330) % 360;
   const c1 = "hsl(" + hue + ", 82%, 88%)";
@@ -430,13 +416,14 @@ const innerCubeEl = document.getElementById("innerCube");
 const outerCubeEl = document.getElementById("outerCube");
 const allFaces = [];
 
+// 创建立方体面（12个面）
 PHOTOS.forEach(function (photo, index) {
   const face = document.createElement("div");
   face.className = "face";
-  face.dataset.layer = photo.layer;
+  face.dataset.layer = index < 6 ? "inner" : "outer";
   face.dataset.layout = FACE_LAYOUTS[index % 6];
 
-  const imgSrc = photo.src || placeholderSVG(photo.caption || ("照片 " + (index + 1)), index);
+  const imgSrc = placeholderSVG(photo.caption, index);
 
   function makeSide(back) {
     const side = document.createElement("div");
@@ -450,13 +437,13 @@ PHOTOS.forEach(function (photo, index) {
 
     const main = document.createElement("img");
     main.className = "side-main";
-    main.alt = photo.caption || ("照片 " + (index + 1));
+    main.alt = photo.caption || "照片";
     main.draggable = false;
     main.src = imgSrc;
 
     const caption = document.createElement("div");
     caption.className = "caption";
-    caption.textContent = back ? "🌸 " + (photo.caption || ("照片 " + (index + 1))) : (photo.caption || ("照片 " + (index + 1)));
+    caption.textContent = back ? "🌸 " + photo.caption : photo.caption;
 
     side.appendChild(bg);
     side.appendChild(main);
@@ -467,14 +454,14 @@ PHOTOS.forEach(function (photo, index) {
   face.appendChild(makeSide(false));
   face.appendChild(makeSide(true));
 
-  (photo.layer === "inner" ? innerCubeEl : outerCubeEl).appendChild(face);
+  (index < 6 ? innerCubeEl : outerCubeEl).appendChild(face);
   allFaces.push(face);
 });
 
 const innerFaces = allFaces.filter(function (f) { return f.dataset.layer === "inner"; });
 const outerFaces = allFaces.filter(function (f) { return f.dataset.layer === "outer"; });
 
-// 等浏览器完成布局后，按两层立方体各自的尺寸设置位置
+// 设置各面的 translateZ
 requestAnimationFrame(function () {
   const innerRadius = Math.round(innerFaces[0].offsetWidth / 2);
   const outerRadius = Math.round(outerFaces[0].offsetWidth / 2);
@@ -486,139 +473,7 @@ requestAnimationFrame(function () {
   });
 });
 
-// ========== 从 photos 仓库定时随机取图 ==========
-let remoteImages = [];
-let photoTimer = null;
-
-function encodeRepoPath(path) {
-  return path.split("/").map(encodeURIComponent).join("/");
-}
-
-function buildImageCandidates(path) {
-  const encoded = encodeRepoPath(path);
-  const base = PHOTOS_REPO_OWNER + "/" + PHOTOS_REPO_NAME;
-  return [
-    "https://raw.githubusercontent.com/" + base + "/" + PHOTOS_BRANCH + "/" + encoded,
-    "https://cdn.jsdelivr.net/gh/" + base + "@" + PHOTOS_BRANCH + "/" + encoded,
-    "https://fastly.jsdelivr.net/gh/" + base + "@" + PHOTOS_BRANCH + "/" + encoded,
-    "https://gcore.jsdelivr.net/gh/" + base + "@" + PHOTOS_BRANCH + "/" + encoded
-  ];
-}
-
-async function fetchRemoteImages() {
-  const apiUrl =
-    "https://api.github.com/repos/" + PHOTOS_REPO_OWNER + "/" + PHOTOS_REPO_NAME +
-    "/git/trees/" + PHOTOS_BRANCH + "?recursive=1";
-  const response = await fetch(apiUrl);
-  if (!response.ok) throw new Error("GitHub API " + response.status);
-  const data = await response.json();
-  const images = (data.tree || [])
-    .map(function (item) { return item.path; })
-    .filter(function (path) { return IMAGE_FILE_RE.test(path); })
-    .map(function (path) {
-      return {
-        path: path,
-        urls: buildImageCandidates(path)
-      };
-    });
-  return images;
-}
-
-function shuffledCopy(list) {
-  const copy = list.slice();
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const temp = copy[i];
-    copy[i] = copy[j];
-    copy[j] = temp;
-  }
-  return copy;
-}
-
-function randomUrls(count, avoidSet) {
-  const pool = shuffledCopy(remoteImages.filter(function (image) {
-    return !avoidSet || !avoidSet.has(image.path);
-  }));
-  const result = [];
-  for (let i = 0; i < count; i++) {
-    if (pool.length > 0) {
-      const index = Math.floor(Math.random() * pool.length);
-      result.push(pool.splice(index, 1)[0]);
-    } else {
-      const fallback = shuffledCopy(remoteImages);
-      result.push(fallback[i % fallback.length]);
-    }
-  }
-  return result;
-}
-
-function assignImageSource(img, urls) {
-  if (!img.dataset.originalSrc) {
-    img.dataset.originalSrc = img.src;
-  }
-  img.dataset.tryIndex = "0";
-  img.onerror = function () {
-    const next = Number(img.dataset.tryIndex || 0) + 1;
-    if (next < urls.length) {
-      img.dataset.tryIndex = String(next);
-      img.src = urls[next];
-    } else {
-      img.onerror = null;
-      img.src = img.dataset.originalSrc;
-    }
-  };
-  img.src = urls[0];
-}
-
-function applyImagesToFaces(faces, images) {
-  faces.forEach(function (face, index) {
-    const image = images[index % images.length];
-    face.classList.add("remote");
-    face.querySelectorAll(".side-bg, .side-main").forEach(function (img) {
-      assignImageSource(img, image.urls);
-      if (img.classList.contains("side-main")) img.alt = "";
-    });
-  });
-}
-
-function applyRandomImages() {
-  if (remoteImages.length === 0) return;
-  const inner = randomUrls(innerFaces.length, null);
-  const outer = randomUrls(outerFaces.length, new Set(inner));
-  applyImagesToFaces(innerFaces, inner);
-  applyImagesToFaces(outerFaces, outer);
-
-  // 预加载下一批候选图，减少切换时的空白
-  shuffledCopy(remoteImages).slice(0, 12).forEach(function (image) {
-    const preload = new Image();
-    preload.src = image.urls[0];
-  });
-}
-
-async function startPhotoFeed() {
-  try {
-    const list = await fetchRemoteImages();
-    remoteImages = list.filter(function (image, index) {
-      return list.findIndex(function (item) { return item.path === image.path; }) === index;
-    });
-  } catch (e) {
-    remoteImages = [];
-  }
-
-  if (remoteImages.length > 0) {
-    applyRandomImages();
-    if (!photoTimer) {
-      photoTimer = setInterval(applyRandomImages, IMAGE_REFRESH_MS);
-    }
-  } else {
-    // 图片仓库暂时为空时，每隔一分钟自动重试一次
-    setTimeout(startPhotoFeed, EMPTY_RETRY_MS);
-  }
-}
-
-initLocalPhotoLibrary();
-
-// ========== 本地图片库（IndexedDB，仅保存在当前设备浏览器） ==========
+// ========== 本地图片库（IndexedDB） ==========
 const LOCAL_DB_NAME = "liti-local-photos";
 const LOCAL_DB_VERSION = 1;
 const LOCAL_STORE_NAME = "photos";
@@ -676,52 +531,34 @@ function releaseLocalObjectUrls() {
   localObjectUrls = [];
 }
 
-function randomLocalItems(pool, count) {
-  const copy = pool.slice();
-  const result = [];
+// 将一组图片应用到指定的面列表（按顺序循环填充）
+function applyItemsToFaces(faces, items) {
+  const count = faces.length;
   for (let i = 0; i < count; i++) {
-    if (copy.length === 0) {
-      result.push(pool[Math.floor(Math.random() * pool.length)]);
-    } else {
-      const index = Math.floor(Math.random() * copy.length);
-      result.push(copy.splice(index, 1)[0]);
-    }
-  }
-  return result;
-}
-
-function applyLocalItemsToFaces(faces, items) {
-  faces.forEach(function (face, index) {
-    const item = items[index % items.length];
-    if (!item) return;
+    const item = items[i % items.length];
+    const face = faces[i];
     face.classList.add("remote");
     face.querySelectorAll(".side-bg, .side-main").forEach(function (img) {
       img.onerror = null;
       img.src = item.url;
       if (img.classList.contains("side-main")) img.alt = item.name || "";
     });
-  });
+    // 更新 caption（使用文件名或序号）
+    const caption = face.querySelector(".caption");
+    if (caption) {
+      caption.textContent = item.name || "📷";
+    }
+  }
 }
 
-function applyRandomLocalImages() {
-  if (localPhotoItems.length === 0) return;
-
-  const inner = randomLocalItems(localPhotoItems, innerFaces.length);
-  const innerIds = new Set(inner.map(function (item) { return item.id; }));
-  const remaining = localPhotoItems.filter(function (item) { return !innerIds.has(item.id); });
-  const outer = randomLocalItems(
-    remaining.length > 0 ? remaining : localPhotoItems,
-    outerFaces.length
-  );
-
-  applyLocalItemsToFaces(innerFaces, inner);
-  applyLocalItemsToFaces(outerFaces, outer);
-}
-
+// 从本地库加载图片并应用到立方体
 async function refreshLocalLibrary() {
   try {
     const records = await loadLocalImages();
     releaseLocalObjectUrls();
+
+    // 按添加时间排序（最新的在前）
+    records.sort(function (a, b) { return (a.addedAt || 0) - (b.addedAt || 0); });
 
     localPhotoItems = records.map(function (record) {
       return {
@@ -733,13 +570,30 @@ async function refreshLocalLibrary() {
     localObjectUrls = localPhotoItems.map(function (item) { return item.url; });
 
     if (localPhotoItems.length > 0) {
-      applyRandomLocalImages();
+      // 内层和外层分别取图片，但这里我们简单用相同的列表（循环填充）
+      // 如果希望内外层不同，可以切分，但用户要求所有面都显示上传图片，这里统一
+      applyItemsToFaces(innerFaces, localPhotoItems);
+      applyItemsToFaces(outerFaces, localPhotoItems);
+    } else {
+      // 无本地图片，恢复占位图
+      allFaces.forEach(function (face, index) {
+        const placeholder = placeholderSVG(PHOTOS[index % PHOTOS.length].caption, index);
+        face.classList.remove("remote");
+        face.querySelectorAll(".side-bg, .side-main").forEach(function (img) {
+          img.src = placeholder;
+        });
+        const caption = face.querySelector(".caption");
+        if (caption) {
+          caption.textContent = PHOTOS[index % PHOTOS.length].caption;
+        }
+      });
     }
   } catch (e) {
-    // IndexedDB 不可用时保持占位图
+    // 出错时保留占位图
   }
 }
 
+// 上传处理
 async function initLocalPhotoLibrary() {
   const uploadBtn = document.getElementById("uploadBtn");
   const fileInput = document.getElementById("fileInput");
@@ -771,10 +625,11 @@ async function initLocalPhotoLibrary() {
     fileInput.value = "";
   });
 
+  // 初始化加载已有图片
   await refreshLocalLibrary();
 }
 
-// ========== 四元数自由旋转（避免转到某个面后卡死） ==========
+// ========== 四元数自由旋转 ==========
 function axisAngle(ax, ay, az, angle) {
   const half = angle / 2;
   const s = Math.sin(half);
@@ -811,36 +666,24 @@ function quatToMatrix3d(q) {
     "0,0,0,1)";
 }
 
-// 初始视角：先绕 X 转 -18°，再绕 Y 转 -28°
 const initial = multiplyQuat(
   axisAngle(0, 1, 0, -28 * Math.PI / 180),
   axisAngle(1, 0, 0, -18 * Math.PI / 180)
 );
 let rotation = normalizeQuat(initial);
-
 let currentZoom = 1;
 
 function renderRotation() {
   scene.style.transform = quatToMatrix3d(rotation) +
     " scale3d(" + currentZoom + "," + currentZoom + "," + currentZoom + ")";
 }
-
 renderRotation();
 
-// 单指拖拽旋转 + 双指捏合缩放
+// 指针事件（拖拽旋转 + 双指缩放）
 const activePointers = new Map();
 let dragPointerId = null;
-let lastX = 0;
-let lastY = 0;
-let moved = false;
-let pinchStarted = false;
-let pinchDistance = 0;
-let pinchBaseZoom = 1;
-let usedPinch = false;
-
-function clampZoom(value) {
-  return Math.max(0.45, Math.min(3.5, value));
-}
+let lastX = 0, lastY = 0, moved = false;
+let pinchStarted = false, pinchDistance = 0, pinchBaseZoom = 1, usedPinch = false;
 
 function pointerDistance() {
   const values = Array.from(activePointers.values());
@@ -848,11 +691,13 @@ function pointerDistance() {
   return Math.hypot(values[0].x - values[1].x, values[0].y - values[1].y);
 }
 
+function clampZoom(value) {
+  return Math.max(0.45, Math.min(3.5, value));
+}
+
 function onPointerDown(event) {
   if (event.pointerType === "mouse" && event.button !== 0) return;
-  if (event.pointerType === "touch" && event.cancelable) {
-    event.preventDefault();
-  }
+  if (event.pointerType === "touch" && event.cancelable) event.preventDefault();
 
   activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
@@ -864,13 +709,8 @@ function onPointerDown(event) {
     usedPinch = false;
     pinchStarted = false;
     scene.classList.add("dragging");
-    try {
-      scene.setPointerCapture(event.pointerId);
-    } catch (e) {
-      // 某些浏览器不支持时忽略
-    }
+    try { scene.setPointerCapture(event.pointerId); } catch (e) {}
   } else {
-    // 第二根手指落下：切换为双指缩放，不再旋转
     dragPointerId = null;
     scene.classList.remove("dragging");
     usedPinch = true;
@@ -914,9 +754,7 @@ function onPointerMove(event) {
   renderRotation();
 }
 
-let lastTapTime = 0;
-let lastTapX = 0;
-let lastTapY = 0;
+let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
 let suppressDblClickUntil = 0;
 
 function onPointerEnd(event) {
@@ -926,7 +764,6 @@ function onPointerEnd(event) {
     dragPointerId = null;
     scene.classList.remove("dragging");
 
-    // 安卓双击判定：只在纯单击、没有拖动/捏合时触发
     if (event.pointerType === "touch" && !usedPinch && !moved) {
       const now = performance.now();
       const tapMoved = Math.abs(event.clientX - lastTapX) + Math.abs(event.clientY - lastTapY);
@@ -940,13 +777,11 @@ function onPointerEnd(event) {
         lastTapY = event.clientY;
       }
     }
-
     usedPinch = false;
     pinchStarted = false;
     pinchDistance = 0;
     moved = false;
   } else if (activePointers.size === 1) {
-    // 双指后只剩一指：保持静止，避免误旋转
     dragPointerId = null;
     scene.classList.remove("dragging");
   }
@@ -977,7 +812,6 @@ function setFaceTransforms(explode) {
   scene.classList.toggle("exploded", explode);
   allFaces.forEach(function (face) {
     const radius = Number(face.dataset.radius || 100);
-    // 内层 1.9 倍、外层 2.0 倍，保持整体层次又不会飞太远
     const multiplier = explode ? (face.dataset.layer === "inner" ? 1.9 : 2.0) : 1;
     const target = Math.round(radius * multiplier);
     face.style.transform = face.dataset.layout + " translateZ(" + target + "px)";
@@ -1028,9 +862,7 @@ function startMusic() {
   audio.play().then(function () {
     playPauseBtn.textContent = "暂停";
     musicStatus.textContent = "播放中";
-  }).catch(function () {
-    // 浏览器未允许自动播放或文件缺失时，等下一次点击再试
-  });
+  }).catch(function () {});
 }
 
 function onFirstUserGesture() {
@@ -1039,7 +871,6 @@ function onFirstUserGesture() {
   document.removeEventListener("touchstart", onFirstUserGesture, true);
   document.removeEventListener("keydown", onFirstUserGesture, true);
 }
-
 document.addEventListener("pointerdown", onFirstUserGesture, true);
 document.addEventListener("touchstart", onFirstUserGesture, true);
 document.addEventListener("keydown", onFirstUserGesture, true);
@@ -1080,7 +911,6 @@ function showControls() {
     document.body.classList.add("ui-idle");
   }, UI_HIDE_DELAY_MS);
 }
-
 document.body.classList.add("ui-idle");
 document.addEventListener("pointerdown", showControls, true);
 document.addEventListener("pointermove", showControls, { passive: true });
@@ -1104,6 +934,9 @@ for (let i = 0; i < petalCount; i++) {
   petal.style.animationDelay = (-Math.random() * 18) + "s";
   petalLayer.appendChild(petal);
 }
+
+// 初始化本地图片库（加载已有图片）
+initLocalPhotoLibrary();
 </script>
 </body>
 </html>
