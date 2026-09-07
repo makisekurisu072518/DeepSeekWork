@@ -150,6 +150,28 @@
     transition: none;
   }
 
+  @keyframes cube-spin {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(360deg); }
+  }
+
+  .cube.outer {
+    animation: cube-spin 20s linear infinite;
+  }
+
+  .cube.inner {
+    visibility: hidden;
+    animation: cube-spin 15s linear infinite reverse;
+  }
+
+  .scene.exploded .cube.inner {
+    visibility: visible;
+  }
+
+  .scene.dragging .cube {
+    animation-play-state: paused;
+  }
+
   .side {
     position: absolute;
     inset: 0;
@@ -164,6 +186,11 @@
 
   .side.back {
     transform: rotateY(180deg);
+    visibility: hidden;
+  }
+
+  .scene.exploded .side.back {
+    visibility: visible;
   }
 
   .side img {
@@ -562,6 +589,7 @@ const toggleBtn = document.getElementById("toggleBtn");
 let exploded = false;
 
 function setFaceTransforms(explode) {
+  scene.classList.toggle("exploded", explode);
   allFaces.forEach(function (face) {
     const radius = Number(face.dataset.radius || 100);
     // 内层 1.9 倍、外层 2.0 倍，保持整体层次又不会飞太远
