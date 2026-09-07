@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>樱花 3D 双层立方体相册</title>
+<title>立体人生</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -100,6 +100,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    touch-action: none;
     perspective: 1400px;
     perspective-origin: 50% 42%;
   }
@@ -337,8 +338,7 @@
 <div id="petals" aria-hidden="true"></div>
 
 <header>
-  <h1>樱花 3D 相册</h1>
-  <p>拖拽旋转 · 双击拆散 / 复原</p>
+  <h1>立体人生</h1>
 </header>
 
 <button id="musicBtn" type="button" aria-label="音乐">♪</button>
@@ -511,34 +511,88 @@ const initial = multiplyQuat(
 );
 let rotation = normalizeQuat(initial);
 
+let currentZoom = 1;
+
 function renderRotation() {
-  scene.style.transform = quatToMatrix3d(rotation);
+  scene.style.transform = quatToMatrix3d(rotation) +
+    " scale3d(" + currentZoom + "," + currentZoom + "," + currentZoom + ")";
 }
 
 renderRotation();
 
-// 拖拽
-let pointerId = null;
+// 单指拖拽旋转 + 双指捏合缩放
+const activePointers = new Map();
+let dragPointerId = null;
 let lastX = 0;
 let lastY = 0;
 let moved = false;
+let pinchStarted = false;
+let pinchDistance = 0;
+let pinchBaseZoom = 1;
+let usedPinch = false;
+
+function clampZoom(value) {
+  return Math.max(0.45, Math.min(3.5, value));
+}
+
+function pointerDistance() {
+  const values = Array.from(activePointers.values());
+  if (values.length < 2) return 0;
+  return Math.hypot(values[0].x - values[1].x, values[0].y - values[1].y);
+}
 
 function onPointerDown(event) {
   if (event.pointerType === "mouse" && event.button !== 0) return;
-  pointerId = event.pointerId;
-  lastX = event.clientX;
-  lastY = event.clientY;
-  moved = false;
-  scene.classList.add("dragging");
-  try {
-    scene.setPointerCapture(event.pointerId);
-  } catch (e) {
-    // 不支持时忽略
+  if (event.pointerType === "touch" && event.cancelable) {
+    event.preventDefault();
+  }
+
+  activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+  if (activePointers.size === 1) {
+    dragPointerId = event.pointerId;
+    lastX = event.clientX;
+    lastY = event.clientY;
+    moved = false;
+    usedPinch = false;
+    pinchStarted = false;
+    scene.classList.add("dragging");
+    try {
+      scene.setPointerCapture(event.pointerId);
+    } catch (e) {
+      // 某些浏览器不支持时忽略
+    }
+  } else {
+    // 第二根手指落下：切换为双指缩放，不再旋转
+    dragPointerId = null;
+    scene.classList.remove("dragging");
+    usedPinch = true;
+    if (activePointers.size === 2) {
+      pinchStarted = true;
+      pinchDistance = pointerDistance();
+      pinchBaseZoom = currentZoom;
+    }
   }
 }
 
 function onPointerMove(event) {
-  if (pointerId !== event.pointerId) return;
+  if (!activePointers.has(event.pointerId)) return;
+  const point = activePointers.get(event.pointerId);
+  point.x = event.clientX;
+  point.y = event.clientY;
+
+  if (activePointers.size >= 2) {
+    if (pinchStarted) {
+      const distance = pointerDistance();
+      if (distance > 0 && pinchDistance > 0) {
+        currentZoom = clampZoom(pinchBaseZoom * (distance / pinchDistance));
+        renderRotation();
+      }
+    }
+    return;
+  }
+
+  if (dragPointerId !== event.pointerId) return;
   const dx = event.clientX - lastX;
   const dy = event.clientY - lastY;
   if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
@@ -556,23 +610,38 @@ function onPointerMove(event) {
 let lastTapTime = 0;
 let lastTapX = 0;
 let lastTapY = 0;
+let suppressDblClickUntil = 0;
 
 function onPointerEnd(event) {
-  if (pointerId !== event.pointerId) return;
-  pointerId = null;
-  scene.classList.remove("dragging");
+  if (!activePointers.delete(event.pointerId)) return;
 
-  if (event.pointerType === "touch" && !moved) {
-    const now = performance.now();
-    const tapMoved = Math.abs(event.clientX - lastTapX) + Math.abs(event.clientY - lastTapY);
-    if (now - lastTapTime < 380 && tapMoved < 16) {
-      toggleExplosion();
-      lastTapTime = 0;
-    } else {
-      lastTapTime = now;
-      lastTapX = event.clientX;
-      lastTapY = event.clientY;
+  if (activePointers.size === 0) {
+    dragPointerId = null;
+    scene.classList.remove("dragging");
+
+    // 安卓双击判定：只在纯单击、没有拖动/捏合时触发
+    if (event.pointerType === "touch" && !usedPinch && !moved) {
+      const now = performance.now();
+      const tapMoved = Math.abs(event.clientX - lastTapX) + Math.abs(event.clientY - lastTapY);
+      if (now - lastTapTime < 380 && tapMoved < 16) {
+        toggleExplosion();
+        lastTapTime = 0;
+        suppressDblClickUntil = performance.now() + 600;
+      } else {
+        lastTapTime = now;
+        lastTapX = event.clientX;
+        lastTapY = event.clientY;
+      }
     }
+
+    usedPinch = false;
+    pinchStarted = false;
+    pinchDistance = 0;
+    moved = false;
+  } else if (activePointers.size === 1) {
+    // 双指后只剩一指：保持静止，避免误旋转
+    dragPointerId = null;
+    scene.classList.remove("dragging");
   }
 }
 
@@ -581,6 +650,7 @@ scene.addEventListener("pointermove", onPointerMove);
 scene.addEventListener("pointerup", onPointerEnd);
 scene.addEventListener("pointercancel", onPointerEnd);
 scene.addEventListener("dblclick", function () {
+  if (performance.now() < suppressDblClickUntil) return;
   toggleExplosion();
 });
 
