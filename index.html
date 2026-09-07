@@ -378,8 +378,10 @@
 </div>
 
 <div class="controls">
+  <button id="uploadBtn" type="button">上传图片</button>
   <button id="toggleBtn" type="button">拆散</button>
 </div>
+<input id="fileInput" type="file" accept="image/*" multiple hidden>
 
 <audio id="audio" preload="metadata" loop></audio>
 
@@ -631,7 +633,169 @@ async function startPhotoFeed() {
   }
 }
 
-startPhotoFeed();
+initLocalPhotoLibrary();
+
+// ========== 本地图片库（IndexedDB，仅保存在当前设备浏览器） ==========
+const LOCAL_DB_NAME = "liti-local-photos";
+const LOCAL_DB_VERSION = 1;
+const LOCAL_STORE_NAME = "photos";
+const LOCAL_REFRESH_MS = 15000;
+
+let localPhotoItems = [];
+let localPhotoTimer = null;
+let localObjectUrls = [];
+
+function openLocalDatabase() {
+  return new Promise(function (resolve, reject) {
+    const request = indexedDB.open(LOCAL_DB_NAME, LOCAL_DB_VERSION);
+    request.onupgradeneeded = function () {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(LOCAL_STORE_NAME)) {
+        db.createObjectStore(LOCAL_STORE_NAME, { keyPath: "id", autoIncrement: true });
+      }
+    };
+    request.onsuccess = function () { resolve(request.result); };
+    request.onerror = function () { reject(request.error); };
+  });
+}
+
+function saveFilesToLocal(files) {
+  return openLocalDatabase().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      const transaction = db.transaction(LOCAL_STORE_NAME, "readwrite");
+      const store = transaction.objectStore(LOCAL_STORE_NAME);
+      let saved = 0;
+
+      Array.from(files).forEach(function (file) {
+        if (!file.type || !file.type.startsWith("image/")) return;
+        store.add({ name: file.name, type: file.type, blob: file, addedAt: Date.now() });
+        saved++;
+      });
+
+      transaction.oncomplete = function () { resolve(saved); };
+      transaction.onerror = function () { reject(transaction.error); };
+      transaction.onabort = function () { reject(transaction.error); };
+    });
+  });
+}
+
+function loadLocalImages() {
+  return openLocalDatabase().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      const transaction = db.transaction(LOCAL_STORE_NAME, "readonly");
+      const store = transaction.objectStore(LOCAL_STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = function () { resolve(request.result || []); };
+      request.onerror = function () { reject(request.error); };
+    });
+  });
+}
+
+function releaseLocalObjectUrls() {
+  localObjectUrls.forEach(function (url) { URL.revokeObjectURL(url); });
+  localObjectUrls = [];
+}
+
+function randomLocalItems(pool, count) {
+  const copy = pool.slice();
+  const result = [];
+  for (let i = 0; i < count; i++) {
+    if (copy.length === 0) {
+      result.push(pool[Math.floor(Math.random() * pool.length)]);
+    } else {
+      const index = Math.floor(Math.random() * copy.length);
+      result.push(copy.splice(index, 1)[0]);
+    }
+  }
+  return result;
+}
+
+function applyLocalItemsToFaces(faces, items) {
+  faces.forEach(function (face, index) {
+    const item = items[index % items.length];
+    if (!item) return;
+    face.classList.add("remote");
+    face.querySelectorAll(".side-bg, .side-main").forEach(function (img) {
+      img.onerror = null;
+      img.src = item.url;
+      if (img.classList.contains("side-main")) img.alt = item.name || "";
+    });
+  });
+}
+
+function applyRandomLocalImages() {
+  if (localPhotoItems.length === 0) return;
+
+  const inner = randomLocalItems(localPhotoItems, innerFaces.length);
+  const innerIds = new Set(inner.map(function (item) { return item.id; }));
+  const remaining = localPhotoItems.filter(function (item) { return !innerIds.has(item.id); });
+  const outer = randomLocalItems(
+    remaining.length > 0 ? remaining : localPhotoItems,
+    outerFaces.length
+  );
+
+  applyLocalItemsToFaces(innerFaces, inner);
+  applyLocalItemsToFaces(outerFaces, outer);
+}
+
+async function refreshLocalLibrary() {
+  try {
+    const records = await loadLocalImages();
+    releaseLocalObjectUrls();
+
+    localPhotoItems = records.map(function (record) {
+      return {
+        id: record.id,
+        name: record.name || "图片",
+        url: URL.createObjectURL(record.blob)
+      };
+    });
+    localObjectUrls = localPhotoItems.map(function (item) { return item.url; });
+
+    if (localPhotoItems.length > 0) {
+      applyRandomLocalImages();
+      if (!localPhotoTimer) {
+        localPhotoTimer = setInterval(applyRandomLocalImages, LOCAL_REFRESH_MS);
+      }
+    }
+  } catch (e) {
+    // IndexedDB 不可用时保持占位图
+  }
+}
+
+async function initLocalPhotoLibrary() {
+  const uploadBtn = document.getElementById("uploadBtn");
+  const fileInput = document.getElementById("fileInput");
+
+  uploadBtn.addEventListener("click", function () {
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(function () {});
+    }
+    fileInput.click();
+  });
+
+  fileInput.addEventListener("change", async function () {
+    if (fileInput.files.length === 0) return;
+    try {
+      const saved = await saveFilesToLocal(fileInput.files);
+      if (saved > 0) {
+        await refreshLocalLibrary();
+        uploadBtn.textContent = "已存 " + localPhotoItems.length + " 张";
+        setTimeout(function () {
+          uploadBtn.textContent = "上传图片";
+        }, 2000);
+      }
+    } catch (e) {
+      uploadBtn.textContent = "保存失败";
+      setTimeout(function () {
+        uploadBtn.textContent = "上传图片";
+      }, 2000);
+    }
+    fileInput.value = "";
+  });
+
+  await refreshLocalLibrary();
+}
 
 // ========== 四元数自由旋转（避免转到某个面后卡死） ==========
 function axisAngle(ax, ay, az, angle) {
