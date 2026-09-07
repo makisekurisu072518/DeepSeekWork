@@ -68,31 +68,6 @@
     }
   }
 
-  header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 3;
-    padding: 18px 14px 0;
-    text-align: center;
-    pointer-events: none;
-  }
-
-  header h1 {
-    font-size: clamp(18px, 4.5vw, 28px);
-    font-weight: 600;
-    letter-spacing: 5px;
-    text-shadow: 0 2px 12px rgba(255, 255, 255, 0.85);
-  }
-
-  header p {
-    margin-top: 6px;
-    font-size: 12px;
-    letter-spacing: 1px;
-    opacity: 0.78;
-  }
-
   .stage {
     position: fixed;
     inset: 0;
@@ -144,7 +119,7 @@
     position: absolute;
     inset: 0;
     transform-style: preserve-3d;
-    transition: transform 0.75s cubic-bezier(0.22, 0.9, 0.3, 1.05);
+    transition: transform 0.9s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .scene.dragging .face {
@@ -152,8 +127,12 @@
   }
 
   @keyframes cube-spin {
-    from { transform: rotateY(0deg); }
-    to   { transform: rotateY(360deg); }
+    0%   { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
+    20%  { transform: rotateX(38deg) rotateY(72deg) rotateZ(-12deg); }
+    40%  { transform: rotateX(-24deg) rotateY(144deg) rotateZ(14deg); }
+    60%  { transform: rotateX(42deg) rotateY(216deg) rotateZ(-10deg); }
+    80%  { transform: rotateX(-30deg) rotateY(288deg) rotateZ(12deg); }
+    100% { transform: rotateX(0deg) rotateY(360deg) rotateZ(0deg); }
   }
 
   .cube.outer {
@@ -245,6 +224,7 @@
     border-radius: 999px;
     padding: 7px 12px;
     box-shadow: 0 6px 20px rgba(130, 40, 80, 0.18);
+    transition: opacity 0.35s ease;
   }
 
   .controls button {
@@ -278,6 +258,7 @@
     box-shadow: 0 6px 18px rgba(130, 40, 80, 0.2);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
+    transition: opacity 0.35s ease;
   }
 
   .music-panel {
@@ -295,6 +276,7 @@
     border-radius: 12px;
     padding: 12px;
     box-shadow: 0 10px 26px rgba(120, 40, 75, 0.22);
+    transition: opacity 0.35s ease;
   }
 
   .music-panel[hidden] {
@@ -336,6 +318,13 @@
     text-align: center;
   }
 
+  body.ui-idle .controls,
+  body.ui-idle #musicBtn,
+  body.ui-idle .music-panel {
+    opacity: 0;
+    pointer-events: none;
+  }
+
   @media (max-width: 520px) {
     .stage {
       perspective: 1000px;
@@ -350,10 +339,6 @@
 <body>
 
 <div id="petals" aria-hidden="true"></div>
-
-<header>
-  <h1>立体人生</h1>
-</header>
 
 <button id="musicBtn" type="button" aria-label="音乐">♪</button>
 
@@ -403,6 +388,13 @@ const PHOTOS = [
 
 // 音乐文件：把 bgm.mp3 放在 index.html 同目录，或改成网络音乐地址
 const MUSIC_SRC = "bgm.mp3";
+
+// 自动开合节奏
+const BREATH_CLOSED_MS = 1600;
+const BREATH_OPEN_MS = 1600;
+
+// 无操作多久后隐藏界面按钮
+const UI_HIDE_DELAY_MS = 3200;
 
 // ===== 图片仓库随机播放配置 =====
 const PHOTOS_REPO_OWNER = "makisekurisu072518";
@@ -983,6 +975,8 @@ scene.addEventListener("dblclick", function () {
 // ========== 拆散 / 复原 ==========
 const toggleBtn = document.getElementById("toggleBtn");
 let exploded = false;
+let breathTimer = null;
+let manualHoldUntil = 0;
 
 function setFaceTransforms(explode) {
   scene.classList.toggle("exploded", explode);
@@ -995,13 +989,32 @@ function setFaceTransforms(explode) {
   });
 }
 
+function applyExplosion(open) {
+  exploded = open;
+  setFaceTransforms(open);
+  toggleBtn.textContent = open ? "复原" : "拆散";
+}
+
+function scheduleBreath() {
+  clearTimeout(breathTimer);
+  const holdMs = exploded ? BREATH_OPEN_MS : BREATH_CLOSED_MS;
+  breathTimer = setTimeout(function () {
+    if (document.hidden || performance.now() < manualHoldUntil) {
+      scheduleBreath();
+      return;
+    }
+    applyExplosion(!exploded);
+  }, holdMs);
+}
+
 function toggleExplosion() {
-  exploded = !exploded;
-  setFaceTransforms(exploded);
-  toggleBtn.textContent = exploded ? "复原" : "拆散";
+  manualHoldUntil = performance.now() + 15000;
+  applyExplosion(!exploded);
+  scheduleBreath();
 }
 
 toggleBtn.addEventListener("click", toggleExplosion);
+scheduleBreath();
 
 // ========== 音乐播放器 ==========
 const audio = document.getElementById("audio");
@@ -1012,8 +1025,29 @@ const volumeRange = document.getElementById("volumeRange");
 const musicStatus = document.getElementById("musicStatus");
 
 audio.src = MUSIC_SRC;
+audio.loop = true;
 audio.volume = Number(volumeRange.value);
-musicStatus.textContent = "点击播放试试";
+musicStatus.textContent = "点击页面自动播放";
+
+function startMusic() {
+  audio.play().then(function () {
+    playPauseBtn.textContent = "暂停";
+    musicStatus.textContent = "播放中";
+  }).catch(function () {
+    // 浏览器未允许自动播放或文件缺失时，等下一次点击再试
+  });
+}
+
+function onFirstUserGesture() {
+  startMusic();
+  document.removeEventListener("pointerdown", onFirstUserGesture, true);
+  document.removeEventListener("touchstart", onFirstUserGesture, true);
+  document.removeEventListener("keydown", onFirstUserGesture, true);
+}
+
+document.addEventListener("pointerdown", onFirstUserGesture, true);
+document.addEventListener("touchstart", onFirstUserGesture, true);
+document.addEventListener("keydown", onFirstUserGesture, true);
 
 musicBtn.addEventListener("click", function () {
   musicPanel.hidden = !musicPanel.hidden;
@@ -1042,6 +1076,20 @@ volumeRange.addEventListener("input", function () {
 audio.addEventListener("error", function () {
   musicStatus.textContent = "请放置 bgm.mp3 或改 MUSIC_SRC";
 });
+
+// ========== 界面自动隐藏 ==========
+function showControls() {
+  document.body.classList.remove("ui-idle");
+  clearTimeout(showControls._timer);
+  showControls._timer = setTimeout(function () {
+    document.body.classList.add("ui-idle");
+  }, UI_HIDE_DELAY_MS);
+}
+
+document.body.classList.add("ui-idle");
+document.addEventListener("pointerdown", showControls, true);
+document.addEventListener("pointermove", showControls, { passive: true });
+document.addEventListener("keydown", showControls, true);
 
 // ========== 樱花飘落 ==========
 const petalLayer = document.getElementById("petals");
