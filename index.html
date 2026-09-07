@@ -233,6 +233,10 @@
     pointer-events: none;
   }
 
+  .face.remote .caption {
+    display: none;
+  }
+
   .controls {
     position: fixed;
     left: 50%;
@@ -402,6 +406,14 @@ const PHOTOS = [
 // 音乐文件：把 bgm.mp3 放在 index.html 同目录，或改成网络音乐地址
 const MUSIC_SRC = "bgm.mp3";
 
+// ===== 图片仓库随机播放配置 =====
+const PHOTOS_REPO_OWNER = "makisekurisu072518";
+const PHOTOS_REPO_NAME = "photos";
+const PHOTOS_BRANCH = "main";
+const IMAGE_REFRESH_MS = 15000;
+const EMPTY_RETRY_MS = 60000;
+const IMAGE_FILE_RE = /\.(jpe?g|png|webp|gif)$/i;
+
 const FACE_LAYOUTS = [
   "rotateY(0deg)",
   "rotateY(180deg)",
@@ -488,6 +500,108 @@ requestAnimationFrame(function () {
     face.style.transform = face.dataset.layout + " translateZ(" + radius + "px)";
   });
 });
+
+// ========== 从 photos 仓库定时随机取图 ==========
+let remoteImageUrls = [];
+let photoTimer = null;
+
+function encodeRepoPath(path) {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
+async function fetchRemoteImages() {
+  const apiUrl =
+    "https://api.github.com/repos/" + PHOTOS_REPO_OWNER + "/" + PHOTOS_REPO_NAME +
+    "/git/trees/" + PHOTOS_BRANCH + "?recursive=1";
+  const response = await fetch(apiUrl);
+  if (!response.ok) throw new Error("GitHub API " + response.status);
+  const data = await response.json();
+  const urls = (data.tree || [])
+    .map(function (item) { return item.path; })
+    .filter(function (path) { return IMAGE_FILE_RE.test(path); })
+    .map(function (path) {
+      return "https://cdn.jsdelivr.net/gh/" + PHOTOS_REPO_OWNER + "/" + PHOTOS_REPO_NAME +
+        "@" + PHOTOS_BRANCH + "/" + encodeRepoPath(path);
+    });
+  return urls;
+}
+
+function shuffledCopy(list) {
+  const copy = list.slice();
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = copy[i];
+    copy[i] = copy[j];
+    copy[j] = temp;
+  }
+  return copy;
+}
+
+function randomUrls(count, avoidSet) {
+  const pool = shuffledCopy(remoteImageUrls.filter(function (url) {
+    return !avoidSet || !avoidSet.has(url);
+  }));
+  const result = [];
+  for (let i = 0; i < count; i++) {
+    if (pool.length > 0) {
+      const index = Math.floor(Math.random() * pool.length);
+      result.push(pool.splice(index, 1)[0]);
+    } else {
+      const fallback = shuffledCopy(remoteImageUrls);
+      result.push(fallback[i % fallback.length]);
+    }
+  }
+  return result;
+}
+
+function applyUrlsToFaces(faces, urls) {
+  faces.forEach(function (face, index) {
+    const url = urls[index % urls.length];
+    face.classList.add("remote");
+    face.querySelectorAll(".side-bg").forEach(function (img) { img.src = url; });
+    face.querySelectorAll(".side-main").forEach(function (img) {
+      img.src = url;
+      img.alt = "";
+    });
+  });
+}
+
+function applyRandomImages() {
+  if (remoteImageUrls.length === 0) return;
+  const inner = randomUrls(innerFaces.length, null);
+  const outer = randomUrls(outerFaces.length, new Set(inner));
+  applyUrlsToFaces(innerFaces, inner);
+  applyUrlsToFaces(outerFaces, outer);
+
+  // 预加载下一批候选图，减少切换时的空白
+  shuffledCopy(remoteImageUrls).slice(0, 12).forEach(function (url) {
+    const image = new Image();
+    image.src = url;
+  });
+}
+
+async function startPhotoFeed() {
+  try {
+    const list = await fetchRemoteImages();
+    remoteImageUrls = list.filter(function (url, index) {
+      return list.indexOf(url) === index;
+    });
+  } catch (e) {
+    remoteImageUrls = [];
+  }
+
+  if (remoteImageUrls.length > 0) {
+    applyRandomImages();
+    if (!photoTimer) {
+      photoTimer = setInterval(applyRandomImages, IMAGE_REFRESH_MS);
+    }
+  } else {
+    // 图片仓库暂时为空时，每隔一分钟自动重试一次
+    setTimeout(startPhotoFeed, EMPTY_RETRY_MS);
+  }
+}
+
+startPhotoFeed();
 
 // ========== 四元数自由旋转（避免转到某个面后卡死） ==========
 function axisAngle(ax, ay, az, angle) {
