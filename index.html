@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>樱花 3D 立方体相册</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --cube-size: min(58vw, 225px);
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  }
+
+  body {
+    background: radial-gradient(ellipse at 20% 10%, #fff0f6 0%, #ffd6e7 45%, #f0a0c0 100%);
+    color: #5c2d43;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #petals {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .petal {
+    position: absolute;
+    top: -6vh;
+    left: 0;
+    width: 14px;
+    height: 11px;
+    border-radius: 150% 0 150% 0;
+    background: linear-gradient(135deg, #ffd7e8, #ffaeca);
+    opacity: 0;
+    will-change: transform;
+    animation: fall linear infinite;
+  }
+
+  .petal:nth-child(even) {
+    border-radius: 0 150% 0 150%;
+  }
+
+  @keyframes fall {
+    0% {
+      transform: translate3d(0, 0, 0) rotate(0deg);
+      opacity: 0;
+    }
+    8% {
+      opacity: var(--petal-opacity, 0.85);
+    }
+    85% {
+      opacity: var(--petal-opacity, 0.85);
+    }
+    100% {
+      transform: translate3d(var(--sway, 20vw), 108vh, 0) rotate(var(--spin, 720deg));
+      opacity: 0;
+    }
+  }
+
+  header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    padding: 20px 14px 0;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  header h1 {
+    font-size: clamp(20px, 5vw, 30px);
+    font-weight: 600;
+    letter-spacing: 6px;
+    text-shadow: 0 2px 12px rgba(255, 255, 255, 0.85);
+  }
+
+  header p {
+    margin-top: 7px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    opacity: 0.78;
+  }
+
+  .stage {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    perspective: 1200px;
+    perspective-origin: 50% 44%;
+  }
+
+  .scene {
+    position: relative;
+    width: var(--cube-size);
+    height: var(--cube-size);
+    transform-style: preserve-3d;
+    transform: rotateX(-18deg) rotateY(-28deg);
+    cursor: grab;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .scene:active {
+    cursor: grabbing;
+  }
+
+  .face {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--cube-size);
+    height: var(--cube-size);
+    overflow: hidden;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 12px 34px rgba(110, 35, 68, 0.35);
+    background: #fff;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transition: transform 0.8s cubic-bezier(0.22, 0.9, 0.3, 1.05);
+  }
+
+  .scene.dragging .face {
+    transition: none;
+  }
+
+  .face img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+  }
+
+  .caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 22px 6px 7px;
+    font-size: 12px;
+    text-align: center;
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+    background: linear-gradient(transparent, rgba(70, 20, 40, 0.72));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+
+  .controls {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    z-index: 5;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 999px;
+    padding: 7px 12px;
+    box-shadow: 0 6px 20px rgba(130, 40, 80, 0.18);
+  }
+
+  .controls button {
+    border: 0;
+    background: rgba(255, 255, 255, 0.85);
+    color: #7a2f50;
+    font-size: 13px;
+    padding: 7px 14px;
+    cursor: pointer;
+    border-radius: 999px;
+    transition: background 0.2s;
+  }
+
+  .controls button:hover {
+    background: #fff;
+  }
+
+  @media (max-width: 520px) {
+    .stage {
+      perspective: 900px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="petals" aria-hidden="true"></div>
+
+<header>
+  <h1>樱花 3D 相册</h1>
+  <p>拖拽旋转 · 双击拆散 / 复原</p>
+</header>
+
+<div class="stage">
+  <div id="cube" class="scene" role="group" aria-label="3D 立方体相册"></div>
+</div>
+
+<div class="controls">
+  <button id="toggleBtn" type="button">拆散</button>
+</div>
+
+<script>
+// ===== 照片配置：把 src 改成你自己的图片路径，例如 "photos/1.jpg" =====
+const PHOTOS = [
+  { src: "", caption: "春" },
+  { src: "", caption: "夏" },
+  { src: "", caption: "秋" },
+  { src: "", caption: "冬" },
+  { src: "", caption: "和你" },
+  { src: "", caption: "樱花" }
+];
+
+// 六面立方体的摆放：顺序为 前 / 后 / 右 / 左 / 上 / 下
+const FACE_LAYOUTS = [
+  "rotateY(0deg)",
+  "rotateY(180deg)",
+  "rotateY(90deg)",
+  "rotateY(-90deg)",
+  "rotateX(90deg)",
+  "rotateX(-90deg)"
+];
+
+function placeholderSVG(label, index) {
+  const hue = (index * 60 + 330) % 360;
+  const c1 = "hsl(" + hue + ", 82%, 88%)";
+  const c2 = "hsl(" + hue + ", 70%, 76%)";
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600">' +
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+    '<stop offset="0" stop-color="' + c1 + '"/>' +
+    '<stop offset="1" stop-color="' + c2 + '"/>' +
+    '</linearGradient></defs>' +
+    '<rect width="600" height="600" fill="url(#g)"/>' +
+    '<text x="50%" y="47%" fill="rgba(255,255,255,0.95)" font-size="150" font-family="sans-serif" text-anchor="middle" dominant-baseline="middle">' + (index + 1) + '</text>' +
+    '<text x="50%" y="62%" fill="rgba(255,255,255,0.92)" font-size="36" font-family="sans-serif" text-anchor="middle">' + label + '</text>' +
+    '</svg>';
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+
+const cube = document.getElementById("cube");
+const faces = [];
+const half = 0; // 占位，实际在下方计算
+
+PHOTOS.forEach(function (photo, index) {
+  const face = document.createElement("div");
+  face.className = "face";
+
+  const img = document.createElement("img");
+  img.alt = photo.caption || ("照片 " + (index + 1));
+  img.draggable = false;
+  img.src = photo.src || placeholderSVG(photo.caption || ("照片 " + (index + 1)), index);
+
+  const caption = document.createElement("div");
+  caption.className = "caption";
+  caption.textContent = photo.caption || ("照片 " + (index + 1));
+
+  face.appendChild(img);
+  face.appendChild(caption);
+  cube.appendChild(face);
+  faces.push(face);
+});
+
+// 等浏览器完成布局后取立方体边长的一半
+requestAnimationFrame(function () {
+  const size = faces[0].offsetWidth;
+  const radius = Math.round(size / 2);
+
+  faces.forEach(function (face, index) {
+    const layout = FACE_LAYOUTS[index % 6];
+    face.dataset.layout = layout;
+    face.dataset.radius = String(radius);
+    face.style.transform = layout + " translateZ(" + radius + "px)";
+  });
+
+  cube.dataset.radius = String(radius);
+});
+
+// 拖拽旋转
+let rotX = -18;
+let rotY = -28;
+let pointerId = null;
+let lastX = 0;
+let lastY = 0;
+let moved = false;
+
+function renderCube() {
+  cube.style.transform = "rotateX(" + rotX + "deg) rotateY(" + rotY + "deg)";
+}
+
+function onPointerDown(event) {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  pointerId = event.pointerId;
+  lastX = event.clientX;
+  lastY = event.clientY;
+  moved = false;
+  cube.classList.add("dragging");
+  try {
+    cube.setPointerCapture(event.pointerId);
+  } catch (e) {
+    // 某些浏览器不支持时忽略
+  }
+}
+
+function onPointerMove(event) {
+  if (pointerId !== event.pointerId) return;
+  const dx = event.clientX - lastX;
+  const dy = event.clientY - lastY;
+  if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+  rotY += dx * 0.45;
+  rotX -= dy * 0.45;
+  rotX = Math.max(-85, Math.min(85, rotX));
+  lastX = event.clientX;
+  lastY = event.clientY;
+  renderCube();
+}
+
+let lastTapTime = 0;
+let lastTapX = 0;
+let lastTapY = 0;
+
+function onPointerEnd(event) {
+  if (pointerId !== event.pointerId) return;
+  pointerId = null;
+  cube.classList.remove("dragging");
+
+  if (event.pointerType === "touch" && !moved) {
+    const now = performance.now();
+    const dx = event.clientX - lastTapX;
+    const dy = event.clientY - lastTapY;
+    const tapMoved = Math.abs(dx) + Math.abs(dy);
+    if (now - lastTapTime < 380 && tapMoved < 16) {
+      toggleExplosion();
+      lastTapTime = 0;
+    } else {
+      lastTapTime = now;
+      lastTapX = event.clientX;
+      lastTapY = event.clientY;
+    }
+  }
+}
+
+cube.addEventListener("pointerdown", onPointerDown);
+cube.addEventListener("pointermove", onPointerMove);
+cube.addEventListener("pointerup", onPointerEnd);
+cube.addEventListener("pointercancel", onPointerEnd);
+cube.addEventListener("dblclick", function () {
+  toggleExplosion();
+});
+
+// 拆散 / 复原
+const toggleBtn = document.getElementById("toggleBtn");
+let exploded = false;
+
+function toggleExplosion() {
+  exploded = !exploded;
+  const radius = Number(cube.dataset.radius || 112);
+  const target = exploded ? Math.round(radius * 3.2) : radius;
+
+  faces.forEach(function (face) {
+    face.style.transform = face.dataset.layout + " translateZ(" + target + "px)";
+  });
+
+  toggleBtn.textContent = exploded ? "复原" : "拆散";
+}
+
+toggleBtn.addEventListener("click", toggleExplosion);
+
+// 樱花飘落
+const petalLayer = document.getElementById("petals");
+const petalCount = Math.min(24, Math.max(12, Math.floor(window.innerWidth / 48)));
+
+for (let i = 0; i < petalCount; i++) {
+  const petal = document.createElement("div");
+  petal.className = "petal";
+  const size = 7 + Math.random() * 8;
+  petal.style.width = size + "px";
+  petal.style.height = (size * 0.8) + "px";
+  petal.style.left = (Math.random() * 100) + "vw";
+  petal.style.setProperty("--sway", (Math.random() * 34 - 12) + "vw");
+  petal.style.setProperty("--spin", (Math.random() * 900 - 450) + "deg");
+  petal.style.setProperty("--petal-opacity", (0.5 + Math.random() * 0.4).toFixed(2));
+  petal.style.animationDuration = (8 + Math.random() * 10) + "s";
+  petal.style.animationDelay = (-Math.random() * 18) + "s";
+  petalLayer.appendChild(petal);
+}
+</script>
+</body>
+</html>
