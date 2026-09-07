@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>樱花 3D 立方体相册</title>
+<title>樱花 3D 双层立方体相册</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
-    --cube-size: min(58vw, 225px);
+    --inner-size: min(42vw, 160px);
+    --outer-size: calc(var(--inner-size) * 1.8);
   }
 
   html, body {
@@ -18,7 +19,7 @@
   }
 
   body {
-    background: radial-gradient(ellipse at 20% 10%, #fff0f6 0%, #ffd6e7 45%, #f0a0c0 100%);
+    background: radial-gradient(ellipse at 20% 10%, #fff0f6 0%, #ffd6e7 45%, #ee9dbd 100%);
     color: #5c2d43;
     touch-action: manipulation;
     -webkit-user-select: none;
@@ -73,20 +74,20 @@
     left: 0;
     right: 0;
     z-index: 3;
-    padding: 20px 14px 0;
+    padding: 18px 14px 0;
     text-align: center;
     pointer-events: none;
   }
 
   header h1 {
-    font-size: clamp(20px, 5vw, 30px);
+    font-size: clamp(18px, 4.5vw, 28px);
     font-weight: 600;
-    letter-spacing: 6px;
+    letter-spacing: 5px;
     text-shadow: 0 2px 12px rgba(255, 255, 255, 0.85);
   }
 
   header p {
-    margin-top: 7px;
+    margin-top: 6px;
     font-size: 12px;
     letter-spacing: 1px;
     opacity: 0.78;
@@ -99,16 +100,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    perspective: 1200px;
-    perspective-origin: 50% 44%;
+    perspective: 1400px;
+    perspective-origin: 50% 42%;
   }
 
   .scene {
     position: relative;
-    width: var(--cube-size);
-    height: var(--cube-size);
+    width: var(--outer-size);
+    height: var(--outer-size);
     transform-style: preserve-3d;
-    transform: rotateX(-18deg) rotateY(-28deg);
     cursor: grab;
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
@@ -118,27 +118,55 @@
     cursor: grabbing;
   }
 
+  .cube {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform-style: preserve-3d;
+  }
+
+  .cube.inner {
+    width: var(--inner-size);
+    height: var(--inner-size);
+    margin-left: calc(var(--inner-size) / -2);
+    margin-top: calc(var(--inner-size) / -2);
+  }
+
+  .cube.outer {
+    width: var(--outer-size);
+    height: var(--outer-size);
+    margin-left: calc(var(--outer-size) / -2);
+    margin-top: calc(var(--outer-size) / -2);
+  }
+
   .face {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: var(--cube-size);
-    height: var(--cube-size);
-    overflow: hidden;
-    border-radius: 8px;
-    border: 2px solid rgba(255, 255, 255, 0.85);
-    box-shadow: 0 12px 34px rgba(110, 35, 68, 0.35);
-    background: #fff;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    transition: transform 0.8s cubic-bezier(0.22, 0.9, 0.3, 1.05);
+    inset: 0;
+    transform-style: preserve-3d;
+    transition: transform 0.75s cubic-bezier(0.22, 0.9, 0.3, 1.05);
   }
 
   .scene.dragging .face {
     transition: none;
   }
 
-  .face img {
+  .side {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 12px 34px rgba(110, 35, 68, 0.32);
+    background: #fff;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .side.back {
+    transform: rotateY(180deg);
+  }
+
+  .side img {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -167,11 +195,8 @@
     position: fixed;
     left: 50%;
     bottom: 20px;
-    z-index: 5;
+    z-index: 6;
     transform: translateX(-50%);
-    display: flex;
-    gap: 8px;
-    align-items: center;
     background: rgba(255, 255, 255, 0.72);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
@@ -185,7 +210,7 @@
     background: rgba(255, 255, 255, 0.85);
     color: #7a2f50;
     font-size: 13px;
-    padding: 7px 14px;
+    padding: 7px 16px;
     cursor: pointer;
     border-radius: 999px;
     transition: background 0.2s;
@@ -195,9 +220,87 @@
     background: #fff;
   }
 
+  #musicBtn {
+    position: fixed;
+    right: 14px;
+    top: 16px;
+    z-index: 7;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.78);
+    color: #7a2f50;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(130, 40, 80, 0.2);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  .music-panel {
+    position: fixed;
+    right: 14px;
+    top: 68px;
+    z-index: 7;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 10px 26px rgba(120, 40, 75, 0.22);
+  }
+
+  .music-panel[hidden] {
+    display: none;
+  }
+
+  .music-panel button {
+    border: 0;
+    background: #ffbcd4;
+    color: #6f2847;
+    font-size: 13px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .music-panel button:hover {
+    background: #ffcfe0;
+  }
+
+  .music-panel label {
+    font-size: 11px;
+    color: #83405f;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .music-panel input[type="range"] {
+    width: 120px;
+    accent-color: #d96392;
+  }
+
+  .music-panel .music-status {
+    font-size: 11px;
+    color: #9a5f78;
+    min-height: 14px;
+    text-align: center;
+  }
+
   @media (max-width: 520px) {
     .stage {
-      perspective: 900px;
+      perspective: 1000px;
+    }
+
+    .music-panel {
+      right: 10px;
     }
   }
 </style>
@@ -211,26 +314,53 @@
   <p>拖拽旋转 · 双击拆散 / 复原</p>
 </header>
 
+<button id="musicBtn" type="button" aria-label="音乐">♪</button>
+
+<div class="music-panel" id="musicPanel" hidden>
+  <button id="playPauseBtn" type="button">播放音乐</button>
+  <label>
+    音量
+    <input id="volumeRange" type="range" min="0" max="1" step="0.05" value="0.7">
+  </label>
+  <div class="music-status" id="musicStatus">未加载</div>
+</div>
+
 <div class="stage">
-  <div id="cube" class="scene" role="group" aria-label="3D 立方体相册"></div>
+  <div id="scene" class="scene" role="group" aria-label="双层 3D 立方体相册">
+    <div id="innerCube" class="cube inner"></div>
+    <div id="outerCube" class="cube outer"></div>
+  </div>
 </div>
 
 <div class="controls">
   <button id="toggleBtn" type="button">拆散</button>
 </div>
 
+<audio id="audio" preload="metadata" loop></audio>
+
 <script>
-// ===== 照片配置：把 src 改成你自己的图片路径，例如 "photos/1.jpg" =====
+// ============================================================
+// 照片配置：src 换成你的图片路径，如 "photos/1.jpg"。
+// 前 6 张贴内层立方体，后 6 张贴外层立方体。
+// ============================================================
 const PHOTOS = [
-  { src: "", caption: "春" },
-  { src: "", caption: "夏" },
-  { src: "", caption: "秋" },
-  { src: "", caption: "冬" },
-  { src: "", caption: "和你" },
-  { src: "", caption: "樱花" }
+  { src: "", caption: "春",   layer: "inner" },
+  { src: "", caption: "夏",   layer: "inner" },
+  { src: "", caption: "秋",   layer: "inner" },
+  { src: "", caption: "冬",   layer: "inner" },
+  { src: "", caption: "和你", layer: "inner" },
+  { src: "", caption: "樱花", layer: "inner" },
+  { src: "", caption: "春天", layer: "outer" },
+  { src: "", caption: "夏天", layer: "outer" },
+  { src: "", caption: "秋天", layer: "outer" },
+  { src: "", caption: "冬天", layer: "outer" },
+  { src: "", caption: "出发", layer: "outer" },
+  { src: "", caption: "未来", layer: "outer" }
 ];
 
-// 六面立方体的摆放：顺序为 前 / 后 / 右 / 左 / 上 / 下
+// 音乐文件：把 bgm.mp3 放在 index.html 同目录，或改成网络音乐地址
+const MUSIC_SRC = "bgm.mp3";
+
 const FACE_LAYOUTS = [
   "rotateY(0deg)",
   "rotateY(180deg)",
@@ -241,7 +371,7 @@ const FACE_LAYOUTS = [
 ];
 
 function placeholderSVG(label, index) {
-  const hue = (index * 60 + 330) % 360;
+  const hue = (index * 47 + 330) % 360;
   const c1 = "hsl(" + hue + ", 82%, 88%)";
   const c2 = "hsl(" + hue + ", 70%, 76%)";
   const svg =
@@ -257,55 +387,114 @@ function placeholderSVG(label, index) {
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 
-const cube = document.getElementById("cube");
-const faces = [];
-const half = 0; // 占位，实际在下方计算
+const scene = document.getElementById("scene");
+const innerCubeEl = document.getElementById("innerCube");
+const outerCubeEl = document.getElementById("outerCube");
+const allFaces = [];
 
 PHOTOS.forEach(function (photo, index) {
   const face = document.createElement("div");
   face.className = "face";
+  face.dataset.layer = photo.layer;
+  face.dataset.layout = FACE_LAYOUTS[index % 6];
 
-  const img = document.createElement("img");
-  img.alt = photo.caption || ("照片 " + (index + 1));
-  img.draggable = false;
-  img.src = photo.src || placeholderSVG(photo.caption || ("照片 " + (index + 1)), index);
+  const imgSrc = photo.src || placeholderSVG(photo.caption || ("照片 " + (index + 1)), index);
 
-  const caption = document.createElement("div");
-  caption.className = "caption";
-  caption.textContent = photo.caption || ("照片 " + (index + 1));
+  function makeSide(back) {
+    const side = document.createElement("div");
+    side.className = back ? "side back" : "side";
 
-  face.appendChild(img);
-  face.appendChild(caption);
-  cube.appendChild(face);
-  faces.push(face);
+    const img = document.createElement("img");
+    img.alt = photo.caption || ("照片 " + (index + 1));
+    img.draggable = false;
+    img.src = imgSrc;
+
+    const caption = document.createElement("div");
+    caption.className = "caption";
+    caption.textContent = back ? "🌸 " + (photo.caption || ("照片 " + (index + 1))) : (photo.caption || ("照片 " + (index + 1)));
+
+    side.appendChild(img);
+    side.appendChild(caption);
+    return side;
+  }
+
+  face.appendChild(makeSide(false));
+  face.appendChild(makeSide(true));
+
+  (photo.layer === "inner" ? innerCubeEl : outerCubeEl).appendChild(face);
+  allFaces.push(face);
 });
 
-// 等浏览器完成布局后取立方体边长的一半
+const innerFaces = allFaces.filter(function (f) { return f.dataset.layer === "inner"; });
+const outerFaces = allFaces.filter(function (f) { return f.dataset.layer === "outer"; });
+
+// 等浏览器完成布局后，按两层立方体各自的尺寸设置位置
 requestAnimationFrame(function () {
-  const size = faces[0].offsetWidth;
-  const radius = Math.round(size / 2);
+  const innerRadius = Math.round(innerFaces[0].offsetWidth / 2);
+  const outerRadius = Math.round(outerFaces[0].offsetWidth / 2);
 
-  faces.forEach(function (face, index) {
-    const layout = FACE_LAYOUTS[index % 6];
-    face.dataset.layout = layout;
+  allFaces.forEach(function (face) {
+    const radius = face.dataset.layer === "inner" ? innerRadius : outerRadius;
     face.dataset.radius = String(radius);
-    face.style.transform = layout + " translateZ(" + radius + "px)";
+    face.style.transform = face.dataset.layout + " translateZ(" + radius + "px)";
   });
-
-  cube.dataset.radius = String(radius);
 });
 
-// 拖拽旋转
-let rotX = -18;
-let rotY = -28;
+// ========== 四元数自由旋转（避免转到某个面后卡死） ==========
+function axisAngle(ax, ay, az, angle) {
+  const half = angle / 2;
+  const s = Math.sin(half);
+  return { w: Math.cos(half), x: ax * s, y: ay * s, z: az * s };
+}
+
+function multiplyQuat(a, b) {
+  return {
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w
+  };
+}
+
+function normalizeQuat(q) {
+  const len = Math.sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
+  if (len === 0) return { w: 1, x: 0, y: 0, z: 0 };
+  return { w: q.w / len, x: q.x / len, y: q.y / len, z: q.z / len };
+}
+
+function quatToMatrix3d(q) {
+  q = normalizeQuat(q);
+  const x = q.x, y = q.y, z = q.z, w = q.w;
+  const x2 = x + x, y2 = y + y, z2 = z + z;
+  const xx = x * x2, xy = x * y2, xz = x * z2;
+  const yy = y * y2, yz = y * z2, zz = z * z2;
+  const wx = w * x2, wy = w * y2, wz = w * z2;
+
+  return "matrix3d(" +
+    (1 - (yy + zz)) + "," + (xy + wz) + "," + (xz - wy) + ",0," +
+    (xy - wz) + "," + (1 - (xx + zz)) + "," + (yz + wx) + ",0," +
+    (xz + wy) + "," + (yz - wx) + "," + (1 - (xx + yy)) + ",0," +
+    "0,0,0,1)";
+}
+
+// 初始视角：先绕 X 转 -18°，再绕 Y 转 -28°
+const initial = multiplyQuat(
+  axisAngle(0, 1, 0, -28 * Math.PI / 180),
+  axisAngle(1, 0, 0, -18 * Math.PI / 180)
+);
+let rotation = normalizeQuat(initial);
+
+function renderRotation() {
+  scene.style.transform = quatToMatrix3d(rotation);
+}
+
+renderRotation();
+
+// 拖拽
 let pointerId = null;
 let lastX = 0;
 let lastY = 0;
 let moved = false;
-
-function renderCube() {
-  cube.style.transform = "rotateX(" + rotX + "deg) rotateY(" + rotY + "deg)";
-}
 
 function onPointerDown(event) {
   if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -313,11 +502,11 @@ function onPointerDown(event) {
   lastX = event.clientX;
   lastY = event.clientY;
   moved = false;
-  cube.classList.add("dragging");
+  scene.classList.add("dragging");
   try {
-    cube.setPointerCapture(event.pointerId);
+    scene.setPointerCapture(event.pointerId);
   } catch (e) {
-    // 某些浏览器不支持时忽略
+    // 不支持时忽略
   }
 }
 
@@ -326,12 +515,15 @@ function onPointerMove(event) {
   const dx = event.clientX - lastX;
   const dy = event.clientY - lastY;
   if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
-  rotY += dx * 0.45;
-  rotX -= dy * 0.45;
-  rotX = Math.max(-85, Math.min(85, rotX));
   lastX = event.clientX;
   lastY = event.clientY;
-  renderCube();
+
+  const speed = 0.005;
+  const deltaY = axisAngle(0, 1, 0, dx * speed);
+  const deltaX = axisAngle(1, 0, 0, dy * speed);
+  const delta = multiplyQuat(deltaY, deltaX);
+  rotation = normalizeQuat(multiplyQuat(delta, rotation));
+  renderRotation();
 }
 
 let lastTapTime = 0;
@@ -341,13 +533,11 @@ let lastTapY = 0;
 function onPointerEnd(event) {
   if (pointerId !== event.pointerId) return;
   pointerId = null;
-  cube.classList.remove("dragging");
+  scene.classList.remove("dragging");
 
   if (event.pointerType === "touch" && !moved) {
     const now = performance.now();
-    const dx = event.clientX - lastTapX;
-    const dy = event.clientY - lastTapY;
-    const tapMoved = Math.abs(dx) + Math.abs(dy);
+    const tapMoved = Math.abs(event.clientX - lastTapX) + Math.abs(event.clientY - lastTapY);
     if (now - lastTapTime < 380 && tapMoved < 16) {
       toggleExplosion();
       lastTapTime = 0;
@@ -359,33 +549,77 @@ function onPointerEnd(event) {
   }
 }
 
-cube.addEventListener("pointerdown", onPointerDown);
-cube.addEventListener("pointermove", onPointerMove);
-cube.addEventListener("pointerup", onPointerEnd);
-cube.addEventListener("pointercancel", onPointerEnd);
-cube.addEventListener("dblclick", function () {
+scene.addEventListener("pointerdown", onPointerDown);
+scene.addEventListener("pointermove", onPointerMove);
+scene.addEventListener("pointerup", onPointerEnd);
+scene.addEventListener("pointercancel", onPointerEnd);
+scene.addEventListener("dblclick", function () {
   toggleExplosion();
 });
 
-// 拆散 / 复原
+// ========== 拆散 / 复原 ==========
 const toggleBtn = document.getElementById("toggleBtn");
 let exploded = false;
 
-function toggleExplosion() {
-  exploded = !exploded;
-  const radius = Number(cube.dataset.radius || 112);
-  const target = exploded ? Math.round(radius * 3.2) : radius;
-
-  faces.forEach(function (face) {
+function setFaceTransforms(explode) {
+  allFaces.forEach(function (face) {
+    const radius = Number(face.dataset.radius || 100);
+    // 内层 1.9 倍、外层 2.0 倍，保持整体层次又不会飞太远
+    const multiplier = explode ? (face.dataset.layer === "inner" ? 1.9 : 2.0) : 1;
+    const target = Math.round(radius * multiplier);
     face.style.transform = face.dataset.layout + " translateZ(" + target + "px)";
   });
+}
 
+function toggleExplosion() {
+  exploded = !exploded;
+  setFaceTransforms(exploded);
   toggleBtn.textContent = exploded ? "复原" : "拆散";
 }
 
 toggleBtn.addEventListener("click", toggleExplosion);
 
-// 樱花飘落
+// ========== 音乐播放器 ==========
+const audio = document.getElementById("audio");
+const musicBtn = document.getElementById("musicBtn");
+const musicPanel = document.getElementById("musicPanel");
+const playPauseBtn = document.getElementById("playPauseBtn");
+const volumeRange = document.getElementById("volumeRange");
+const musicStatus = document.getElementById("musicStatus");
+
+audio.src = MUSIC_SRC;
+audio.volume = Number(volumeRange.value);
+musicStatus.textContent = "点击播放试试";
+
+musicBtn.addEventListener("click", function () {
+  musicPanel.hidden = !musicPanel.hidden;
+});
+
+playPauseBtn.addEventListener("click", function () {
+  if (audio.paused) {
+    audio.play().then(function () {
+      playPauseBtn.textContent = "暂停";
+      musicStatus.textContent = "播放中";
+    }).catch(function () {
+      musicStatus.textContent = "找不到音乐文件";
+      playPauseBtn.textContent = "播放音乐";
+    });
+  } else {
+    audio.pause();
+    playPauseBtn.textContent = "播放音乐";
+    musicStatus.textContent = "已暂停";
+  }
+});
+
+volumeRange.addEventListener("input", function () {
+  audio.volume = Number(volumeRange.value);
+});
+
+audio.addEventListener("error", function () {
+  musicStatus.textContent = "请放置 bgm.mp3 或改 MUSIC_SRC";
+});
+
+// ========== 樱花飘落 ==========
 const petalLayer = document.getElementById("petals");
 const petalCount = Math.min(24, Math.max(12, Math.floor(window.innerWidth / 48)));
 
