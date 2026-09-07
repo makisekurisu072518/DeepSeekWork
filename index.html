@@ -194,10 +194,24 @@
     visibility: visible;
   }
 
-  .side img {
+  .side-bg {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
+    pointer-events: none;
+    filter: blur(16px) brightness(0.78) saturate(1.25);
+    transform: scale(1.25);
+  }
+
+  .side-main {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
     display: block;
     pointer-events: none;
   }
@@ -431,16 +445,24 @@ PHOTOS.forEach(function (photo, index) {
     const side = document.createElement("div");
     side.className = back ? "side back" : "side";
 
-    const img = document.createElement("img");
-    img.alt = photo.caption || ("照片 " + (index + 1));
-    img.draggable = false;
-    img.src = imgSrc;
+    const bg = document.createElement("img");
+    bg.className = "side-bg";
+    bg.alt = "";
+    bg.draggable = false;
+    bg.src = imgSrc;
+
+    const main = document.createElement("img");
+    main.className = "side-main";
+    main.alt = photo.caption || ("照片 " + (index + 1));
+    main.draggable = false;
+    main.src = imgSrc;
 
     const caption = document.createElement("div");
     caption.className = "caption";
     caption.textContent = back ? "🌸 " + (photo.caption || ("照片 " + (index + 1))) : (photo.caption || ("照片 " + (index + 1)));
 
-    side.appendChild(img);
+    side.appendChild(bg);
+    side.appendChild(main);
     side.appendChild(caption);
     return side;
   }
