@@ -6,7 +6,7 @@ This file gives an agent working in this repo the context it needs to operate we
 
 ### Issue tracker
 
-Issues and specs for this repo live as GitHub issues on `makisekurisu072518/codex`, driven through the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues and specs for this repo live as GitHub issues on `makisekurisu072518/DeepSeekWork`, driven through the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
